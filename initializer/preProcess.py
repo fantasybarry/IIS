@@ -31,6 +31,25 @@ class dataCollector():
         
         # Change to match the location's pressure (hPa) at sea level
         self.sea_level_pressure = 1013.25
+
+        if self.config.get("mqtt", {}).get("enabled", False):
+            try:
+                from tools.transmitter import MQTTTransmitter
+                self.mqtt_transmitter = MQTTTransmitter(self.config["mqtt"])
+                if self.mqtt_transmitter.connect():
+                    print("✅ MQTT transmitter connected")
+                else:
+                    print("❌ MQTT connection failed - data will be queued")
+            except ImportError:
+                print("Warning: paho-mqtt not installed. Install with: pip install paho-mqtt")
+                self.mqtt_transmitter = None
+            except ConnectionError:
+                print("Failed to connect to the target host. Check the host config")
+            except Exception as e:
+                print(f"MQTT Setup error: {e}")
+                self.mqtt_transmitter = None
+        else:
+            self.mqtt_transmitter = None
         
     def load_config(self, path):
         """ Load Json file for Configuration """
@@ -126,6 +145,16 @@ class dataCollector():
     def store_readings(self, readings):
         """Store sensor readings in database"""
         conn = sqlite3.connect(self.db_path)
+        
+        # Transmit via MQTT if enabled
+        if self.mqtt_transmitter:
+            try:
+                success_count = self.mqtt_transmitter.transmit_batch(readings)
+                if success_count > 0:
+                    print(f"📡 Transmitted {success_count}/{len(readings)} readings via MQTT")
+            except Exception as e:
+                print(f"MQTT transmitted error: {e}")
+                
         cursor = conn.cursor()
         
         for reading in readings:
