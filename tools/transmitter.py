@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import json
 import time
 import threading
-from queue import Queue
+from queue import Queue, Empty
 from datetime import datetime
 import logging
 
@@ -56,12 +56,15 @@ class MQTTTransmitter:
         try:
             self.client.connect(self.broker_host, self.broker_port, 60)
             self.client.loop_start()
-
+        
             # Wait for connection with timeout
             timeout = 10
             start_time = time.time()
             while not self.connected and (time.time() - start_time) < timeout:
                 time.sleep(0.1)
+
+            if not self.connected:
+                self.client.loop_stop()
 
             return self.connected
         
@@ -75,9 +78,10 @@ class MQTTTransmitter:
             self.client.disconnect()
         
     def transmit_reading(self, reading):
-        if not self._queue_if_offline(reading):
-            return self._send_reading(reading)
-        return True
+        queue_result = self._queue_if_offline(reading)
+        if queue_result is not None:
+            return queue_result
+        return self._send_reading(reading)
     
     def transmit_batch(self, readings):
         success_count = 0
@@ -124,18 +128,20 @@ class MQTTTransmitter:
         if not self.connected:
             if self.offline_queue.qsize() < self.max_queue_size:
                 self.offline_queue.put(reading)
-                self.logger.info(f"Queued reading offlien. Queue size: {self.offline_queue.qsize()}")
+                self.logger.info(f"Queued reading offline. Queue size: {self.offline_queue.qsize()}")
                 return True
-            else:
-                self.logger.warning("Offine queue full. Dropping oldest messages.")
-                # Remove oldest message to make room
-                try:
-                    self.offline_queue.get_nowait()
-                    self.offline_queue.put(reading)
-                except:
-                    pass
-                return True
-        return False
+            self.logger.warning("Offline queue full. Dropping oldest message.")
+            try:
+                self.offline_queue.get_nowait()
+                self.offline_queue.put(reading)
+            except Empty:
+                self.logger.error("Offline queue reported full but no entries were available to drop.")
+                return False
+            except Exception as exc:
+                self.logger.error(f"Error updating offline queue: {exc}", exc_info=True)
+                return False
+            return False
+        return None
 
     def _process_offline_queue(self):
         self.logger.info(f"Processing {self.offline_queue.qsize()} queued messages")
@@ -150,9 +156,12 @@ class MQTTTransmitter:
                     # Put it back if sending failed
                     self.offline_queue.put(reading)
                     break
-            except:
+            except Empty:
                 break
-        
+            except Exception as exc:
+                self.logger.error(f"Error processing offline queue: {exc}", exc_info=True)
+                break
+
         self.logger.info(f"Processed {processed} queued messages")
 
     
