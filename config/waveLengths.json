@@ -28,5 +28,15 @@
         "layers": ["environmental", "proximity", "movement"],
         "update_interval": 5,
         "history_retention_hours": 24
+    },
+    "mqtt": {
+        "enabled": true,
+        "host": "100.93.29.30",
+        "port": 22,
+        "username": "barry",
+        "password": "Qwe2020!lwq?",
+        "base_topic": "sensors",
+        "device_id": "sensor_device_1",
+        "transmission_mode": "realtime"
     }
 }
