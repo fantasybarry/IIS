@@ -1,0 +1,32 @@
+{
+    "sensors_definition": {
+        "bmp280": {
+            "driver": "adafruit_bmp280",
+            "type": "environmental",
+            "pins": {"i2c_address": "0x76"},
+            "measurements": ["temperature", "pressure", "altitude"],
+            "units": {"temperature": "C", "pressure": "hPa", "altitude": "m"}
+        },
+        "ir_obstacle": {
+            "driver": "gpiozero",
+            "type": "proximity",
+            "pins": {"gpio": 17},
+            "measurements": ["obstacle_detected"],
+            "units": {"obstacle_detected": "boolean"}
+        }
+    },
+    "mapping": {
+        "coordinate_system": "relative",
+        "origin": {"x": 0, "y": 0},
+        "scale": "1m_per_unit",
+        "sensor_positions": {
+            "bmp280": {"x": 0, "y": 0, "z": 1.5},
+            "ir_obstacle": {"x": 0, "y": 0, "z": 1.0}
+        }
+    },
+    "visualization": {
+        "layers": ["environmental", "proximity", "movement"],
+        "update_interval": 5,
+        "history_retention_hours": 24
+    }
+}
